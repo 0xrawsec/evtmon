@@ -191,30 +191,47 @@ func XMLEventToGoEvtxMap(xe *wevtapi.XMLEvent) (*evtx.GoEvtxMap, error) {
 	return &ge, nil
 }
 
+var (
+	// uninitialized
+	statsFlag   bool
+	debug       bool
+	listAliases bool
+	filters     args.ListIntVar
+	duration    DurationArg
+	output      string
+	stats       Stats
+
+	err    error
+	ofile  *os.File
+	writer *gzip.Writer
+
+	// initialized
+	eventProvider  = wevtapi.NewPullEventProvider()
+	channelAliases = map[string]string{
+		"sysmon":   "Microsoft-Windows-Sysmon/Operational",
+		"security": "Security",
+		"ps":       "Microsoft-Windows-PowerShell/Operational",
+		"defender": "Microsoft-Windows-Windows Defender/Operational",
+	}
+	channels = make([]string, 0)
+)
+
+func terminate() {
+	// No error handling
+	if writer != nil {
+		writer.Flush()
+		writer.Close()
+	}
+	if ofile != nil {
+		ofile.Close()
+	}
+	if statsFlag {
+		stats.Summary()
+	}
+	os.Exit(ExitFailure)
+}
+
 func main() {
-	var (
-		// uninitialized
-		statsFlag   bool
-		debug       bool
-		listAliases bool
-		filters     args.ListIntVar
-		duration    DurationArg
-		output      string
-
-		err    error
-		ofile  *os.File
-		writer *gzip.Writer
-
-		// initialized
-		eventProvider  = wevtapi.NewPullEventProvider()
-		channelAliases = map[string]string{
-			"sysmon":   "Microsoft-Windows-Sysmon/Operational",
-			"security": "Security",
-			"ps":       "Microsoft-Windows-PowerShell/Operational",
-			"defender": "Microsoft-Windows-Windows Defender/Operational",
-		}
-		channels = make([]string, 0)
-	)
 
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "%s\n%s\n\n", Copyright, License)
@@ -243,7 +260,7 @@ func main() {
 		os.Exit(ExitSuccess)
 	}
 
-	stats := NewStats(filters...)
+	stats = NewStats(filters...)
 	wg := sync.WaitGroup{}
 
 	// Signal handler to catch interrupt
@@ -256,18 +273,7 @@ func main() {
 		<-c
 		eventProvider.Stop()
 		cancel()
-		// No error handling
-		if writer != nil {
-			writer.Flush()
-			writer.Close()
-		}
-		if ofile != nil {
-			ofile.Close()
-		}
-		if statsFlag {
-			stats.Summary()
-		}
-		os.Exit(ExitFailure)
+		terminate()
 	}()
 
 	if output != "" {
@@ -300,10 +306,7 @@ func main() {
 				time.Sleep(time.Millisecond * 500)
 			}
 			cancel()
-			if statsFlag {
-				stats.Summary()
-				os.Exit(ExitFailure)
-			}
+			terminate()
 		}()
 	}
 
