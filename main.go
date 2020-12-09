@@ -234,7 +234,7 @@ func terminate() {
 func main() {
 
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "%s\n%s\n\n", Copyright, License)
+		fmt.Fprintf(os.Stderr, "%s\n%s\nCommit: %s\n\n", Copyright, License, commitID)
 		fmt.Fprintf(os.Stderr, "Usage: %s [OPTIONS] CHANNELS|ALIASES...\n", filepath.Base(os.Args[0]))
 		flag.PrintDefaults()
 	}
